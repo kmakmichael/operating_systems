@@ -90,22 +90,19 @@ int main(void)
      	/* setup() calls exit() when Control-D is entered */
      	setup(inputBuffer, args, &background);
 
-     	/** the steps are:
-     	(1) fork a child process using fork()
-     	(2) the child process will invoke execvp()
-     	(3) if background == 0, the parent will wait,
-     	    otherwise it will continue to the next iteration. */
-
+	
+	// Create child process, record pid
 	pid_t pid;
 	pid = fork();
 	
+
 	if (pid < 0) {
 		printf("Fork failed");
-	} else if (pid == 0) {
+	} else if (pid == 0) { // child process
 		execvp(args[0], args);
-	} else {	
-		if(background == 0) {
-			wait(NULL);
+	} else {	// parent process
+		if(background == 0) { // if command was run in the foreground,
+			wait(NULL);   // wait for the child to finish
 		}
 	}
 
