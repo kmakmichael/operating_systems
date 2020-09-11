@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 
 #define MAX_LINE 80 /* 80 chars per line, per command, should be enough. */
 
@@ -94,6 +95,21 @@ int main(void)
      	(2) the child process will invoke execvp()
      	(3) if background == 0, the parent will wait,
      	    otherwise it will continue to the next iteration. */
+
+	pid_t pid;
+	pid = fork();
+	
+	if (pid < 0) {
+		printf("Fork failed");
+	} else if (pid == 0) {
+		execvp(args[0], args);
+	} else {	
+		if(background == 0) {
+			wait(NULL);
+		}
+	}
+
+
   }
 }
 
