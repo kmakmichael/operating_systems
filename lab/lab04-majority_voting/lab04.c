@@ -6,7 +6,7 @@
 
 int main() {
 	uint16_t num_voters = 0;
-	pid_t pid;
+	pid_t pid = 0;
 	int **pipes;
 
 	// parameter input
@@ -22,8 +22,18 @@ int main() {
 	pipes = calloc(num_voters, sizeof(int *));
 	for (int i = 0; i < num_voters; i++)
 	{
-		pipes[i] = calloc(2, sizeof(int));
-		pipe(pipes[i]);
+		if (pid == 0) {
+			pipes[i] = calloc(2, sizeof(int));
+			pipe(pipes[i]);
+			pid = fork();
+			if (pid < 0) {
+				printf("fork failed!");
+				return 0;
+			}
+	}
+		
+	} if (pid > 0) {
+		printf("hi, I'm a child process!\n");
 	}
 
 	//execvp() or free(pipes)
