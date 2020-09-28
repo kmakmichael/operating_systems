@@ -1,6 +1,6 @@
 #include <pthread.h>
 #include <stdio.h>
-#include <stdint.h>
+#include <inttypes.h>
 #include <stdlib.h>
 
 //ugly globals for now, maybe fix later
@@ -22,18 +22,18 @@ int main(int argc, char *argv[]) {
 	}
 	uint64_t num_fibbs = atoi(argv[1]);
 	if (num_fibbs < 1) {
-		fprintf(stderr, "%lu must be greater than 1\n", num_fibbs);	
+		fprintf(stderr, "%" PRIu64 "must be greater than 1\n", num_fibbs);	
 		return -1;		
 	}
 	// 94 is the highest we can go with 64 bits
 	if (num_fibbs > 93) {
-		fprintf(stderr, "%lu must be less than 94\n", num_fibbs);
+		fprintf(stderr, "%" PRIu64 "must be less than 94\n", num_fibbs);
 		return -1;
 	}
 
 	// pthread prep and creation
 	if ( !(fibbs = calloc(num_fibbs, sizeof *fibbs)) ) {
-		fprintf(stderr, "could not alloc for %lu fibbonacci numbers!", num_fibbs);
+		fprintf(stderr, "could not alloc for %" PRIu64 "fibbonacci numbers!", num_fibbs);
 	}
 	pthread_attr_init(&attr);
 	pthread_create(&tid, &attr, fibby, argv[1]);
@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
 	pthread_join(tid, NULL);
 	printf("Generated %lu fibonacci numbers:\n", num_fibbs);
 	for(uint64_t i = 0; i < num_fibbs; i++) {
-		printf("%3lu:  %-10lu\n", i, fibbs[i]);
+		printf("%3" PRIu64 ":  %-10" PRIu64 "\n", i, fibbs[i]);
 	}
 	return 0;
 }
