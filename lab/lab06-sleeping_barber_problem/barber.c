@@ -5,6 +5,12 @@
 #include <pthread.h>
 #include <unistd.h>
 
+
+void *barber();
+
+pthread_mutex_t barber_mutex;
+pthread_cond_t bell;
+
 int main(int argc, char *argv[]) {
     // handle params
 	if (argc != 3) {
@@ -29,8 +35,16 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Number of customers (%" PRIu64 ") must be less than 256\n", seats);
 		return -1;
 	}
-    printf("Creating barber thread...\n");
 
+    // program data
+    pthread_t barber_tid;
+
+
+
+    printf("Creating barber thread...\n");
+    pthread_mutex_init(&barber_mutex, NULL);
+    pthread_cond_init(&bell, NULL);
+    pthread_create(&barber_tid, NULL, barber, 0);
     printf("Barber thread created\n");
 
 
@@ -40,5 +54,18 @@ int main(int argc, char *argv[]) {
         printf("Creating thread for customer %zu\n", i);
     }
 
+    pthread_mutex_lock(&barber_mutex);
+    pthread_cond_signal(&bell);
+    pthread_mutex_unlock(&barber_mutex);
+    
+    pthread_join(barber_tid, NULL);
     return 0;
+}
+
+void *barber(void *param) {
+    printf("hello from the barber thread\n");
+    pthread_mutex_lock(&barber_mutex);
+    pthread_cond_wait(&bell, &barber_mutex);
+    printf("goodbye from the barber thread\n");
+    pthread_exit(0);
 }
