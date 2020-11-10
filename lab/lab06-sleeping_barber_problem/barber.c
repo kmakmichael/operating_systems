@@ -10,12 +10,17 @@
 void *barber();
 void *customer();
 int32_t check_waiting_room();
+bool customers_waiting();
+bool customer_at(size_t seat);
 
 size_t seats;
 size_t customer_count;
 
 pthread_mutex_t bell_lock;
 pthread_cond_t bell;
+
+pthread_mutex_t shop_open_lock;
+bool shop_open;
 
 pthread_mutex_t q_lock;
 
@@ -55,7 +60,9 @@ int main(int argc, char *argv[]) {
 
     // program data
     pthread_t barber_tid;
-
+    pthread_mutex_init(&q_lock, NULL);
+    pthread_mutex_init(&shop_open_lock, NULL);
+    shop_open = true;
 
     printf("Creating barber thread...\n");
     pthread_mutex_init(&bell_lock, NULL);
@@ -72,17 +79,20 @@ int main(int argc, char *argv[]) {
 
     printf("Entering Main Loop\n");
     for(size_t i = 0; i < customer_count; i++) {
-        sleep(2);
         printf("===Creating thread for customer %zu\n", i);
         pthread_t cus_tid;
         pthread_create(&cus_tid, NULL, customer, 0);
+        sleep(1);
     }
 
     pthread_mutex_lock(&bell_lock);
+    shop_open = false;
     pthread_cond_signal(&bell);
     pthread_mutex_unlock(&bell_lock);
     
     pthread_join(barber_tid, NULL);
+    sleep(1);
+    printf("===END EXECUTION\n");
     return 0;
 }
 
@@ -90,30 +100,49 @@ void *barber(void *param) {
     printf(" - hello from the barber thread\n");
     pthread_cond_t *wc;
     pthread_mutex_t *wl;
-    /*for(int i = 0; i < 5; i++) {
+    size_t current_seat;
+
+    pthread_mutex_lock(&shop_open_lock);
+    while(shop_open) {
+        // sleep if there's no customers
+        pthread_mutex_unlock(&shop_open_lock);
         pthread_mutex_lock(&bell_lock);
         pthread_cond_wait(&bell, &bell_lock);
-        printf(" - acknowlint32_t
-        pthread_mutex_lock(&q_lock);
-        wc = waiting_room[0]->cond;
-        wl = waiting_room[0]->lock;
-        pthread_mutex_unlock(&q_lock);
+        printf(" - waking up\n");
+        pthread_mutex_unlock(&bell_lock);
 
-        pthread_mutex_lock(wl);
-        printf(" - signaling customer\n");
-        pthread_cond_signal(wc);
-        pthread_mutex_unlock(wl);
+        while(customers_waiting()) {
+            pthread_mutex_lock(&q_lock);
+            if(waiting_room[current_seat]->occupied) {
+                pthread_mutex_unlock(&q_lock);
+                // read customer info
+                pthread_mutex_lock(&q_lock);
+                wc = waiting_room[current_seat]->cond;
+                wl = waiting_room[current_seat]->lock;
+                pthread_mutex_unlock(&q_lock);
 
-        sleep(1);
+                // signal the customer to exit a seat
+                pthread_mutex_lock(wl);
+                pthread_cond_signal(wc);
+                pthread_mutex_unlock(wl);
 
-        printf(" - completing haircut\n");
-        pthread_mutex_lock(wl);
-        pthread_cond_signal(wc);
-        pthread_mutex_unlock(wl);
-        printf(" - customer kicked\n");
+                sleep(3);
 
-    }*/
-    sleep(30);
+                pthread_mutex_lock(wl);
+                pthread_cond_signal(wc);
+                pthread_mutex_unlock(wl);
+            }
+            pthread_mutex_unlock(&q_lock);
+            ++current_seat;
+            if(current_seat >= seats) {
+                current_seat = 0;
+            }
+        }
+        printf(" - sleeping once more\n");
+        // reset current_seat, the next customer will occupy seat 0
+        current_seat = 0;
+    }
+    pthread_mutex_unlock(&shop_open_lock);
     printf(" - goodbye from the barber thread\n");
     pthread_exit(0);
 }
@@ -123,8 +152,6 @@ void *customer(void *param) {
     pthread_cond_t waiting_cond;
     pthread_cond_init(&waiting_cond, NULL);
     pthread_mutex_init(&waiting_lock, NULL);
-    
-    printf("\tentered the shop");
 
     // grab a seat in the waiting room
     int32_t empty_seat = check_waiting_room();
@@ -140,26 +167,29 @@ void *customer(void *param) {
     waiting_room[empty_seat]->lock = &waiting_lock;
     waiting_room[empty_seat]->occupied = true;
     pthread_mutex_unlock(&q_lock);
-    printf("\toccupied seat #%i\n", empty_seat);
 
-    /*// signal to the barber that you're ready
+    // signal to the barber that you're ready
     pthread_mutex_lock(&waiting_lock);
     pthread_mutex_lock(&bell_lock);
-    printf("\tin Q and waiting for barber\n");
+    printf("\tin Q at seat %i and waiting for barber\n", empty_seat);
     pthread_cond_signal(&bell);
     pthread_mutex_unlock(&bell_lock);
     pthread_cond_wait(&waiting_cond, &waiting_lock);
     pthread_mutex_unlock(&waiting_lock);
 
-    // you've been called, watch the completion cond
-    printf("\tbarber called me OwO?\n");
+    // free up the waiting-room seat
+    pthread_mutex_lock(&q_lock);
+    printf("\tfreed up seat %i\n", empty_seat);
+    waiting_room[empty_seat]->occupied = false;
+    pthread_mutex_unlock(&q_lock);
+
+    // wait for the haircut to finish
     pthread_mutex_lock(&waiting_lock);
-    printf("\tsnib snib\n");
     pthread_cond_wait(&waiting_cond, &waiting_lock);
-    printf("\tmy hair's been cut!\n");
     pthread_mutex_unlock(&waiting_lock);
-    */
-    // finish and die
+    
+    // exit the shop
+    printf("\tleaving the store\n");
     pthread_mutex_destroy(&waiting_lock);
     pthread_cond_destroy(&waiting_cond);
     pthread_exit(NULL);
@@ -176,4 +206,14 @@ int32_t check_waiting_room() {
     }
     pthread_mutex_unlock(&q_lock);
     return -1;
+}
+
+bool customers_waiting() {
+    bool waiting = false;
+    pthread_mutex_lock(&q_lock);
+    for (size_t i = 0; i < seats; i++) {
+        waiting |= waiting_room[i]->occupied;
+    }
+    pthread_mutex_unlock(&q_lock);
+    return waiting;
 }
