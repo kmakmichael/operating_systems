@@ -7,9 +7,15 @@
 
 
 void *barber();
+void *customer();
 
 pthread_mutex_t barber_mutex;
 pthread_cond_t bell;
+
+typedef struct {
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
+} Customer;
 
 int main(int argc, char *argv[]) {
     // handle params
@@ -40,7 +46,6 @@ int main(int argc, char *argv[]) {
     pthread_t barber_tid;
 
 
-
     printf("Creating barber thread...\n");
     pthread_mutex_init(&barber_mutex, NULL);
     pthread_cond_init(&bell, NULL);
@@ -52,6 +57,8 @@ int main(int argc, char *argv[]) {
     for(size_t i = 0; i < customer_count; i++) {
         sleep(1);
         printf("Creating thread for customer %zu\n", i);
+        pthread_t cus_tid;
+        pthread_create(&cus_tid, NULL, customer, 0);
     }
 
     pthread_mutex_lock(&barber_mutex);
@@ -64,8 +71,19 @@ int main(int argc, char *argv[]) {
 
 void *barber(void *param) {
     printf("hello from the barber thread\n");
-    pthread_mutex_lock(&barber_mutex);
-    pthread_cond_wait(&bell, &barber_mutex);
+    for(int i = 0; i < 5; i++) {
+        pthread_mutex_lock(&barber_mutex);
+        pthread_cond_wait(&bell, &barber_mutex);
+        printf("acknowledged customer %d\n", i);
+        pthread_mutex_unlock(&barber_mutex);
+    }
     printf("goodbye from the barber thread\n");
     pthread_exit(0);
+}
+
+void *customer(void *param) {
+    Customer *data = param;
+    pthread_mutex_lock(&barber_mutex);
+    pthread_cond_signal(&bell);
+    pthread_mutex_unlock(&barber_mutex);
 }
