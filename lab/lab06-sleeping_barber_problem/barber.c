@@ -4,18 +4,25 @@
 #include <sys/types.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 
 void *barber();
 void *customer();
 
-pthread_mutex_t barber_mutex;
+pthread_mutex_t bell_lock;
 pthread_cond_t bell;
 
+pthread_mutex_t q_lock;
+
 typedef struct {
-    pthread_mutex_t lock;
-    pthread_cond_t cond;
-} Customer;
+    pthread_mutex_t *lock;
+    pthread_cond_t *cond;
+    bool occupied;
+} Seat;
+
+Seat **waiting_room;
+
 
 int main(int argc, char *argv[]) {
     // handle params
@@ -47,43 +54,99 @@ int main(int argc, char *argv[]) {
 
 
     printf("Creating barber thread...\n");
-    pthread_mutex_init(&barber_mutex, NULL);
+    pthread_mutex_init(&bell_lock, NULL);
     pthread_cond_init(&bell, NULL);
     pthread_create(&barber_tid, NULL, barber, 0);
     printf("Barber thread created\n");
 
+    printf("Creating the waiting room\n");
+    waiting_room = calloc(seats, sizeof *waiting_room);
+    for(size_t i = 0; i < seats; i++) {
+        waiting_room[i] = calloc(1, sizeof(Seat));
+    }
+    printf("Waiting room ready\n");
 
     printf("Entering Main Loop\n");
     for(size_t i = 0; i < customer_count; i++) {
-        sleep(1);
-        printf("Creating thread for customer %zu\n", i);
+        sleep(2);
+        printf("===Creating thread for customer %zu\n", i);
         pthread_t cus_tid;
         pthread_create(&cus_tid, NULL, customer, 0);
     }
 
-    pthread_mutex_lock(&barber_mutex);
+    pthread_mutex_lock(&bell_lock);
     pthread_cond_signal(&bell);
-    pthread_mutex_unlock(&barber_mutex);
+    pthread_mutex_unlock(&bell_lock);
     
     pthread_join(barber_tid, NULL);
     return 0;
 }
 
 void *barber(void *param) {
-    printf("hello from the barber thread\n");
+    printf(" - hello from the barber thread\n");
+    pthread_cond_t *wc;
+    pthread_mutex_t *wl;
     for(int i = 0; i < 5; i++) {
-        pthread_mutex_lock(&barber_mutex);
-        pthread_cond_wait(&bell, &barber_mutex);
-        printf("acknowledged customer %d\n", i);
-        pthread_mutex_unlock(&barber_mutex);
+        pthread_mutex_lock(&bell_lock);
+        pthread_cond_wait(&bell, &bell_lock);
+        printf(" - acknowledged customer %d\n", i);
+        pthread_mutex_unlock(&bell_lock);
+
+        pthread_mutex_lock(&q_lock);
+        wc = waiting_room[0]->cond;
+        wl = waiting_room[0]->lock;
+        pthread_mutex_unlock(&q_lock);
+
+        pthread_mutex_lock(wl);
+        printf(" - signaling customer\n");
+        pthread_cond_signal(wc);
+        pthread_mutex_unlock(wl);
+
+        sleep(1);
+
+        printf(" - completing haircut\n");
+        pthread_mutex_lock(wl);
+        pthread_cond_signal(wc);
+        pthread_mutex_unlock(wl);
+        printf(" - customer kicked\n");
+
     }
-    printf("goodbye from the barber thread\n");
+    printf(" - goodbye from the barber thread\n");
     pthread_exit(0);
 }
 
 void *customer(void *param) {
-    Customer *data = param;
-    pthread_mutex_lock(&barber_mutex);
+    pthread_mutex_t waiting_lock;
+    pthread_cond_t waiting_cond;
+
+    pthread_cond_init(&waiting_cond, NULL);
+
+    // grab a seat in the waiting room
+    pthread_mutex_lock(&q_lock);
+    waiting_room[0]->cond = &waiting_cond;
+    waiting_room[0]->lock = &waiting_lock;
+    waiting_room[0]->occupied = true;
+    pthread_mutex_unlock(&q_lock);
+
+    // signal to the barber that you're ready
+    pthread_mutex_lock(&waiting_lock);
+    pthread_mutex_lock(&bell_lock);
+    printf("\tin Q and waiting for barber\n");
     pthread_cond_signal(&bell);
-    pthread_mutex_unlock(&barber_mutex);
+    pthread_mutex_unlock(&bell_lock);
+    pthread_cond_wait(&waiting_cond, &waiting_lock);
+    pthread_mutex_unlock(&waiting_lock);
+
+    // you've been called, watch the completion cond
+    printf("\tbarber called me OwO?\n");
+    pthread_mutex_lock(&waiting_lock);
+    printf("\tsnib snib\n");
+    pthread_cond_wait(&waiting_cond, &waiting_lock);
+    printf("\tmy hair's been cut!\n");
+    pthread_mutex_unlock(&waiting_lock);
+
+    // finish and die
+    pthread_mutex_destroy(&waiting_lock);
+    pthread_cond_destroy(&waiting_cond);
+    pthread_exit(NULL);
 }
