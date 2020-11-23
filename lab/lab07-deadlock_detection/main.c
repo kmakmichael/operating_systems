@@ -149,7 +149,8 @@ bool bankers(system_state *state, sequence *solution) {
                 tracker.processes[p] = 1;
 
                 // add it to the solution sequence
-                solution->processes[tracker.count] = p;
+                //printf("adding %zu at solution[%zu]\n", p, solution->count);
+                solution->processes[solution->count] = p;
                 solution->count += 1;
             
                 // raise the flag
@@ -275,7 +276,7 @@ void print_sys_state(const system_state *s) {
 void print_sequence(const sequence *solution) {
     printf("{");
     for(size_t p = 0; p < solution->count; p++) {
-        printf(" p%zu ", solution->processes[p]);
+        printf(" p%zu", solution->processes[p]);
     }
     printf("}\n");
 }
